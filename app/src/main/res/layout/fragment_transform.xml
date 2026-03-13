@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Statut Batterie LiTime"
+            android:text="@string/title_status"
             android:textAlignment="center"
             android:textColor="#FFFFFF"
             android:textSize="24sp"
@@ -25,14 +25,14 @@
             android:id="@+id/btn_connect"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Rechercher Batterie"
+            android:text="@string/btn_search"
             android:layout_marginBottom="16dp" />
 
         <!-- Charge Level -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Niveau de Charge"
+            android:text="@string/label_charge_level"
             android:textColor="#FFFFFF" />
 
         <ProgressBar
@@ -50,7 +50,7 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Puissance (Watts)"
+            android:hint="@string/hint_watts"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
             android:layout_marginBottom="8dp">
@@ -67,7 +67,7 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Température"
+            android:hint="@string/hint_temp"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
             android:layout_marginBottom="8dp">
@@ -84,7 +84,7 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Tension / Courant"
+            android:hint="@string/hint_volt_curr"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
             android:layout_marginBottom="8dp">
@@ -101,7 +101,7 @@
             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Tension des Cellules / État"
+            android:hint="@string/hint_cells"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF">
             <com.google.android.material.textfield.TextInputEditText

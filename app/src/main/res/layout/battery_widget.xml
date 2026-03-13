@@ -10,13 +10,13 @@
         android:id="@+id/widget_title"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Statut Batterie LiTime"
+        android:text="@string/title_status"
         android:textColor="#FFFFFF"
         android:textStyle="bold"
         android:layout_centerHorizontal="true"
         android:textSize="14sp" />
 
-    <!-- Cercle indicateur de charge - Agrandi de 12dp à 18dp -->
+    <!-- Cercle indicateur de charge -->
     <ImageView
         android:id="@+id/widget_indicator"
         android:layout_width="18dp"
@@ -25,7 +25,8 @@
         android:layout_alignTop="@id/widget_title"
         android:layout_alignBottom="@id/widget_title"
         android:layout_marginStart="8dp"
-        android:src="@android:drawable/presence_online" />
+        android:src="@android:drawable/presence_online"
+        android:contentDescription="@null" />
 
     <ProgressBar
         android:id="@+id/widget_progress"
@@ -103,7 +104,7 @@
         android:layout_below="@id/data_container"
         android:layout_marginTop="4dp"
         android:scaleType="fitXY"
-        android:contentDescription="Voltage history graph" />
+        android:contentDescription="@string/widget_graph_description" />
 
     <TextView
         android:id="@+id/widget_last_update"

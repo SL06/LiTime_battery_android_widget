@@ -36,6 +36,8 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
 
     companion object {
         private const val MAX_HISTORY = 200
+        private const val MIN_GRAPH_VOLTAGE = 12.5f
+        private const val MAX_GRAPH_VOLTAGE = 13.5f
     }
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -123,17 +125,18 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
     private fun parseBatteryData(data: ByteArray) {
         if (data.size < 66) { latch.countDown(); return }
         val buf = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
-        val voltage = (buf.getInt(12).toLong() and 0xFFFFFFFFL).toFloat() / 1000f
+        val rawVoltage = (buf.getInt(12).toLong() and 0xFFFFFFFFL).toFloat() / 1000f
         val current = buf.getInt(48).toFloat() / 1000f
         val remainingAh = (buf.getShort(62).toInt() and 0xFFFF).toFloat() / 100f
         val capacityAh = (buf.getShort(64).toInt() and 0xFFFF).toFloat() / 100f
         val cellTempC = buf.getShort(52).toInt()
         
+        // Cap voltage for graph history
+        val cappedVoltage = rawVoltage.coerceIn(MIN_GRAPH_VOLTAGE, MAX_GRAPH_VOLTAGE)
+        
         val chargePercent = if (capacityAh > 0f) (remainingAh / capacityAh * 100f).coerceIn(0f, 100f) else 0f
         
-        // Color logic for the indicator circle
-        val circleColor = getColorForVoltage(voltage)
-
+        val circleColor = getColorForVoltage(rawVoltage)
         val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
 
         // --- GESTION DE L'HISTORIQUE ---
@@ -141,7 +144,7 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         val historyStr = prefs.getString("voltage_history", "") ?: ""
         val historyList = if (historyStr.isEmpty()) mutableListOf() else historyStr.split(",").mapNotNull { it.trim().toFloatOrNull() }.toMutableList()
         
-        historyList.add(voltage)
+        historyList.add(cappedVoltage)
         if (historyList.size > MAX_HISTORY) historyList.removeAt(0)
         
         val newHistoryStr = historyList.joinToString(",")
@@ -152,9 +155,9 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         prefs.edit().apply {
             putString("level", "%.1f".format(chargePercent))
             putInt("progress", chargePercent.toInt())
-            putString("watts", "%.1f W".format(current * voltage))
+            putString("watts", "%.1f W".format(current * rawVoltage))
             putString("temp", "$cellTempC")
-            putString("volt_curr", "%.2f V / %.1f A".format(voltage, current))
+            putString("volt_curr", "%.2f V / %.1f A".format(rawVoltage, current))
             putString("remaining_total", "%.2f / %.2f Ah".format(remainingAh, capacityAh))
             putInt("indicator_color", circleColor)
             putString("last_update", currentTime)
@@ -206,24 +209,38 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         }
         
-        val minV = 12.5f
-        val maxV = 13.5f
-        
+        // Vertical padding to ensure lines at limits are visible
+        val vPadding = 12f
+        val innerHeight = height - 2 * vPadding
+
+        // Re-calculate helper for correct scaling
+        val scale = innerHeight / (MAX_GRAPH_VOLTAGE - MIN_GRAPH_VOLTAGE)
+        fun getScaledY(v: Float): Float {
+            val capped = v.coerceIn(MIN_GRAPH_VOLTAGE, MAX_GRAPH_VOLTAGE)
+            return height - vPadding - (capped - MIN_GRAPH_VOLTAGE) * scale
+        }
+
         // --- LIGNES HORIZONTALES ---
+        // 13.5V (Haut)
+        val y135 = getScaledY(13.5f)
+        canvas.drawLine(0f, y135, width.toFloat(), y135, gridPaintSecondary)
+        canvas.drawText("13.5V", 5f, y135 + 14f, textPaint)
+
         // 13.0V (Principale)
-        val y130 = height - ((13.0f - minV) / (maxV - minV) * height)
+        val y130 = getScaledY(13.0f)
         canvas.drawLine(0f, y130, width.toFloat(), y130, gridPaintMain)
         canvas.drawText("13.0V", 5f, y130 - 4f, textPaint)
 
+        // 12.5V (Bas)
+        val y125 = getScaledY(12.5f)
+        canvas.drawLine(0f, y125, width.toFloat(), y125, gridPaintSecondary)
+        canvas.drawText("12.5V", 5f, y125 - 4f, textPaint)
+
         // 13.25V et 12.75V (Secondaires)
-        val y1325 = height - ((13.25f - minV) / (maxV - minV) * height)
-        val y1275 = height - ((12.75f - minV) / (maxV - minV) * height)
+        val y1325 = getScaledY(13.25f)
+        val y1275 = getScaledY(12.75f)
         canvas.drawLine(0f, y1325, width.toFloat(), y1325, gridPaintSecondary)
         canvas.drawLine(0f, y1275, width.toFloat(), y1275, gridPaintSecondary)
-
-        // Identification 13.5V et 12.5V (Bords)
-        canvas.drawText("13.5V", 5f, 15f, textPaint)
-        canvas.drawText("12.5V", 5f, height.toFloat() - 5f, textPaint)
 
         // --- LIGNES VERTICALES ---
         val gridPaintVertical = Paint().apply {
@@ -249,15 +266,15 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         if (history.size > 1) {
             val offset = MAX_HISTORY - history.size
             for (i in 0 until history.size - 1) {
-                val v1 = history[i].coerceIn(minV, maxV)
-                val v2 = history[i+1].coerceIn(minV, maxV)
+                val v1 = history[i]
+                val v2 = history[i+1]
                 
                 linePaint.color = getColorForVoltage(v2)
                 
                 val x1 = (i + offset) * dx
-                val y1 = height - ((v1 - minV) / (maxV - minV) * height)
+                val y1 = getScaledY(v1)
                 val x2 = (i + 1 + offset) * dx
-                val y2 = height - ((v2 - minV) / (maxV - minV) * height)
+                val y2 = getScaledY(v2)
 
                 canvas.drawLine(x1, y1, x2, y2, linePaint)
             }

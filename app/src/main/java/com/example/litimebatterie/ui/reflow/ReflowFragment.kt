@@ -23,7 +23,7 @@ class ReflowFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         val reflowViewModel =
-            ViewModelProvider(this).get(ReflowViewModel::class.java)
+            ViewModelProvider(this)[ReflowViewModel::class.java]
 
         _binding = FragmentReflowBinding.inflate(inflater, container, false)
         val root: View = binding.root
