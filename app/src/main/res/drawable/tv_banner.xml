@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fond noir -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#000000" />
+        </shape>
+    </item>
+    <!-- Texte au centre -->
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/banner_text_helper" />
+    </item>
+</layer-list>
