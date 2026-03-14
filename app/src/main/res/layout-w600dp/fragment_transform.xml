@@ -29,11 +29,27 @@
             android:layout_marginBottom="16dp" />
 
         <!-- Charge Level -->
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Niveau de Charge"
-            android:textColor="#FFFFFF" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="Niveau de Charge"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp" />
+            <TextView
+                android:id="@+id/tv_charge_percent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--%"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ProgressBar
             android:id="@+id/pb_battery"

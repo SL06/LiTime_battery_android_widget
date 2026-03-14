@@ -202,11 +202,26 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
             pathEffect = DashPathEffect(floatArrayOf(5f, 5f), 0f)
         }
 
+        val referencePaint = Paint().apply {
+            color = "#ADD8E6".toColorInt() // Light Blue
+            strokeWidth = 1f
+            style = Paint.Style.STROKE
+            pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
+            isAntiAlias = true
+        }
+
         val textPaint = Paint().apply {
             color = Color.LTGRAY
             textSize = 14f
             isAntiAlias = true
             typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        }
+
+        val referenceTextPaint = Paint().apply {
+            color = "#ADD8E6".toColorInt()
+            textSize = 12f
+            isAntiAlias = true
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
         }
         
         // Vertical padding to ensure lines at limits are visible
@@ -224,7 +239,12 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         // 13.5V (Haut)
         val y135 = getScaledY(13.5f)
         canvas.drawLine(0f, y135, width.toFloat(), y135, gridPaintSecondary)
-        canvas.drawText("13.5V", 5f, y135 + 14f, textPaint)
+        canvas.drawText("13.5V", 5f, y135 - 4f, textPaint)
+
+        // 13.33V (Référence Bleu Clair)
+        val y1333 = getScaledY(13.33f)
+        canvas.drawLine(0f, y1333, width.toFloat(), y1333, referencePaint)
+        canvas.drawText("13.33V", width - 50f, y1333 - 4f, referenceTextPaint)
 
         // 13.0V (Principale)
         val y130 = getScaledY(13.0f)
@@ -234,7 +254,7 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         // 12.5V (Bas)
         val y125 = getScaledY(12.5f)
         canvas.drawLine(0f, y125, width.toFloat(), y125, gridPaintSecondary)
-        canvas.drawText("12.5V", 5f, y125 - 4f, textPaint)
+        canvas.drawText("12.5V", 5f, y125 + 14f, textPaint)
 
         // 13.25V et 12.75V (Secondaires)
         val y1325 = getScaledY(13.25f)

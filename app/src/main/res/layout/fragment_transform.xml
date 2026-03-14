@@ -17,7 +17,7 @@
             android:text="@string/title_status"
             android:textAlignment="center"
             android:textColor="#FFFFFF"
-            android:textSize="24sp"
+            android:textSize="28sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
@@ -26,24 +26,41 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/btn_search"
+            android:textSize="18sp"
             android:layout_marginBottom="16dp" />
 
         <!-- Charge Level -->
-        <TextView
-            android:layout_width="wrap_content"
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/label_charge_level"
-            android:textColor="#FFFFFF" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
+            <TextView
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:text="@string/label_charge_level"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp" />
+            <TextView
+                android:id="@+id/tv_charge_percent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--%"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <ProgressBar
             android:id="@+id/pb_battery"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent"
-            android:layout_height="30dp"
+            android:layout_height="40dp"
             android:progressDrawable="@android:drawable/progress_horizontal"
             android:progress="0"
             android:max="100"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="24dp" />
 
         <!-- Watts -->
         <com.google.android.material.textfield.TextInputLayout
@@ -53,13 +70,15 @@
             android:hint="@string/hint_watts"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_watts"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:textColor="#FFFFFF" />
+                android:textColor="#FFFFFF"
+                android:textSize="22sp"
+                android:textStyle="bold" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Battery Temp -->
@@ -70,13 +89,14 @@
             android:hint="@string/hint_temp"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_temp"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:textColor="#FFFFFF" />
+                android:textColor="#FFFFFF"
+                android:textSize="22sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Volt/Current -->
@@ -87,13 +107,14 @@
             android:hint="@string/hint_volt_curr"
             android:textColorHint="#FFFFFF"
             app:boxStrokeColor="#FFFFFF"
-            android:layout_marginBottom="8dp">
+            android:layout_marginBottom="12dp">
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/et_volt_curr"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:enabled="false"
-                android:textColor="#FFFFFF" />
+                android:textColor="#FFFFFF"
+                android:textSize="22sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <!-- Cell Volts / Debug -->
@@ -110,7 +131,7 @@
                 android:layout_height="wrap_content"
                 android:enabled="false"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </com.google.android.material.textfield.TextInputLayout>
 
     </LinearLayout>

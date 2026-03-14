@@ -15,6 +15,8 @@ import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -25,6 +27,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.graphics.toColorInt
 import androidx.fragment.app.Fragment
 import com.example.litimebatterie.databinding.FragmentTransformBinding
 import java.nio.ByteBuffer
@@ -198,6 +201,16 @@ class TransformFragment : Fragment() {
         }
     }
 
+    private fun getColorForVoltage(v: Double): Int {
+        return when {
+            v >= 13.33 -> Color.BLUE
+            v >= 13.25 -> Color.GREEN
+            v >= 13.20 -> Color.YELLOW
+            v >= 13.15 -> "#FFA500".toColorInt() // Orange
+            else -> Color.RED
+        }
+    }
+
     private fun parseBatteryData(data: ByteArray) {
         val buffer = ByteBuffer.wrap(data).order(ByteOrder.LITTLE_ENDIAN)
         try {
@@ -214,10 +227,13 @@ class TransformFragment : Fragment() {
             }
 
             val percent = if (capacityAh > 0) (remainingAh / capacityAh * 100).coerceAtMost(100.0) else 0.0
+            val color = getColorForVoltage(voltage)
             
             handler.post {
                 binding.etWatts.setText("%.1f W".format(current * voltage))
                 binding.pbBattery.progress = percent.toInt()
+                binding.pbBattery.progressTintList = ColorStateList.valueOf(color)
+                binding.tvChargePercent.text = "%.1f %%".format(percent)
                 binding.etTemp.setText("$tempC °C")
                 binding.etVoltCurr.setText("%.2f V / %.1f A".format(voltage, current))
                 binding.etCells.setText(cellVolts.joinToString(" | "))
