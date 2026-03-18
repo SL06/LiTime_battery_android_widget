@@ -35,9 +35,105 @@ import java.util.concurrent.TimeUnit
 class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context, params) {
 
     companion object {
-        private const val MAX_HISTORY = 200
-        private const val MIN_GRAPH_VOLTAGE = 12.5f
-        private const val MAX_GRAPH_VOLTAGE = 13.5f
+        const val MAX_HISTORY = 200
+        const val MIN_GRAPH_VOLTAGE = 12.5f
+        const val MAX_GRAPH_VOLTAGE = 13.5f
+
+        fun generateGraphBase64(history: List<Float>, context: Context): String {
+            val width = 2000
+            val height = 800
+            val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+            val canvas = Canvas(bitmap)
+            
+            canvas.drawColor("#222222".toColorInt())
+            
+            val gridPaint = Paint().apply {
+                color = "#333333".toColorInt()
+                strokeWidth = 3f
+                style = Paint.Style.STROKE
+                pathEffect = DashPathEffect(floatArrayOf(25f, 25f), 0f)
+            }
+
+            val textPaint = Paint().apply {
+                color = Color.LTGRAY
+                textSize = 50f
+                isAntiAlias = true
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            }
+
+            val referenceTextPaint = Paint().apply {
+                color = Color.LTGRAY 
+                alpha = 130
+                textSize = 45f
+                isAntiAlias = true
+                typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
+            }
+
+            // vPadding réduit à 10f pour maximiser l'espace et réduire le vide aux bords
+            val vPadding = 10f 
+            val innerHeight = height - 2 * vPadding
+            val scale = innerHeight / (MAX_GRAPH_VOLTAGE - MIN_GRAPH_VOLTAGE)
+            
+            fun getScaledY(v: Float): Float {
+                val capped = v.coerceIn(MIN_GRAPH_VOLTAGE, MAX_GRAPH_VOLTAGE)
+                return height - vPadding - (capped - MIN_GRAPH_VOLTAGE) * scale
+            }
+
+            // Lignes de grille uniformes (13.5, 13.0, 12.5)
+            val labels = listOf(MAX_GRAPH_VOLTAGE, 13.0f, MIN_GRAPH_VOLTAGE)
+            for (v in labels) {
+                val y = getScaledY(v)
+                canvas.drawLine(0f, y, width.toFloat(), y, gridPaint)
+                canvas.drawText("%.2fV".format(v), 25f, if(v == MIN_GRAPH_VOLTAGE) y - 10f else y + 50f, textPaint)
+            }
+
+            // Ligne de référence 13.33V (Style différent, texte descendu)
+            val y1333 = getScaledY(13.33f)
+            val dashPaint1333 = Paint().apply {
+                color = "#555555".toColorInt()
+                strokeWidth = 2f
+                style = Paint.Style.STROKE
+                pathEffect = DashPathEffect(floatArrayOf(15f, 15f), 0f)
+            }
+            canvas.drawLine(0f, y1333, width.toFloat(), y1333, dashPaint1333)
+            canvas.drawText("13.33V", width - 200f, y1333 + 60f, referenceTextPaint)
+
+            // Grille temporelle
+            val dx = width.toFloat() / (MAX_HISTORY - 1)
+            for (k in 0 until MAX_HISTORY step 6) {
+                val x = (MAX_HISTORY - 1 - k) * dx
+                gridPaint.color = if (k % 24 == 0) "#444444".toColorInt() else "#333333".toColorInt()
+                canvas.drawLine(x, 0f, x, height.toFloat(), gridPaint)
+            }
+
+            // Courbe
+            val linePaint = Paint().apply {
+                strokeWidth = 12f
+                isAntiAlias = true
+                style = Paint.Style.STROKE
+                strokeCap = Paint.Cap.ROUND
+                strokeJoin = Paint.Join.ROUND
+            }
+            
+            if (history.size > 1) {
+                val offset = MAX_HISTORY - history.size
+                for (i in 0 until history.size - 1) {
+                    val v2 = history[i+1]
+                    linePaint.color = when {
+                        v2 >= 13.33f -> Color.BLUE
+                        v2 >= 13.25f -> Color.GREEN
+                        v2 >= 13.20f -> Color.YELLOW
+                        v2 >= 13.15f -> "#FFA500".toColorInt()
+                        else -> Color.RED
+                    }
+                    canvas.drawLine((i + offset) * dx, getScaledY(history[i]), (i + 1 + offset) * dx, getScaledY(history[i+1]), linePaint)
+                }
+            }
+            
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+            return Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
+        }
     }
 
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -131,33 +227,32 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
         val capacityAh = (buf.getShort(64).toInt() and 0xFFFF).toFloat() / 100f
         val cellTempC = buf.getShort(52).toInt()
         
-        // Cap voltage for graph history
-        val cappedVoltage = rawVoltage.coerceIn(MIN_GRAPH_VOLTAGE, MAX_GRAPH_VOLTAGE)
-        
         val chargePercent = if (capacityAh > 0f) (remainingAh / capacityAh * 100f).coerceIn(0f, 100f) else 0f
-        
-        val circleColor = getColorForVoltage(rawVoltage)
-        val currentTime = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+        val circleColor = when {
+            rawVoltage >= 13.33f -> Color.BLUE
+            rawVoltage >= 13.25f -> Color.GREEN
+            rawVoltage >= 13.20f -> Color.YELLOW
+            rawVoltage >= 13.15f -> "#FFA500".toColorInt()
+            else -> Color.RED
+        }
+        val currentTime = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
 
-        // --- GESTION DE L'HISTORIQUE ---
         val prefs = applicationContext.getSharedPreferences("BatteryPrefs", Context.MODE_PRIVATE)
         val historyStr = prefs.getString("voltage_history", "") ?: ""
         val historyList = if (historyStr.isEmpty()) mutableListOf() else historyStr.split(",").mapNotNull { it.trim().toFloatOrNull() }.toMutableList()
         
-        historyList.add(cappedVoltage)
+        historyList.add(rawVoltage)
         if (historyList.size > MAX_HISTORY) historyList.removeAt(0)
         
         val newHistoryStr = historyList.joinToString(",")
-        
-        // --- GENERATION DU GRAPHIQUE ---
-        val graphBase64 = generateGraphBase64(historyList)
+        val graphBase64 = generateGraphBase64(historyList, applicationContext)
 
         prefs.edit().apply {
             putString("level", "%.1f".format(chargePercent))
             putInt("progress", chargePercent.toInt())
             putString("watts", "%.1f W".format(current * rawVoltage))
             putString("temp", "$cellTempC")
-            putString("volt_curr", "%.2f V / %.1f A".format(rawVoltage, current))
+            putString("volt_curr", "%.3f V / %.1f A".format(rawVoltage, current))
             putString("remaining_total", "%.2f / %.2f Ah".format(remainingAh, capacityAh))
             putInt("indicator_color", circleColor)
             putString("last_update", currentTime)
@@ -168,141 +263,6 @@ class BatteryWorker(context: Context, params: WorkerParameters) : Worker(context
 
         updateWidget()
         latch.countDown()
-    }
-
-    private fun getColorForVoltage(v: Float): Int {
-        return when {
-            v >= 13.33f -> Color.BLUE
-            v >= 13.25f -> Color.GREEN
-            v >= 13.20f -> Color.YELLOW
-            v >= 13.15f -> "#FFA500".toColorInt() // Orange
-            else -> Color.RED
-        }
-    }
-
-    private fun generateGraphBase64(history: List<Float>): String {
-        val width = 400
-        val height = 120
-        val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        
-        // Background
-        canvas.drawColor("#222222".toColorInt())
-        
-        val gridPaintMain = Paint().apply {
-            color = Color.DKGRAY
-            strokeWidth = 1.5f
-            style = Paint.Style.STROKE
-        }
-
-        val gridPaintSecondary = Paint().apply {
-            color = "#333333".toColorInt()
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-            pathEffect = DashPathEffect(floatArrayOf(5f, 5f), 0f)
-        }
-
-        val referencePaint = Paint().apply {
-            color = "#ADD8E6".toColorInt() // Light Blue
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-            pathEffect = DashPathEffect(floatArrayOf(10f, 10f), 0f)
-            isAntiAlias = true
-        }
-
-        val textPaint = Paint().apply {
-            color = Color.LTGRAY
-            textSize = 14f
-            isAntiAlias = true
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        }
-
-        val referenceTextPaint = Paint().apply {
-            color = "#ADD8E6".toColorInt()
-            textSize = 12f
-            isAntiAlias = true
-            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL)
-        }
-        
-        // Vertical padding to ensure lines at limits are visible
-        val vPadding = 12f
-        val innerHeight = height - 2 * vPadding
-
-        // Re-calculate helper for correct scaling
-        val scale = innerHeight / (MAX_GRAPH_VOLTAGE - MIN_GRAPH_VOLTAGE)
-        fun getScaledY(v: Float): Float {
-            val capped = v.coerceIn(MIN_GRAPH_VOLTAGE, MAX_GRAPH_VOLTAGE)
-            return height - vPadding - (capped - MIN_GRAPH_VOLTAGE) * scale
-        }
-
-        // --- LIGNES HORIZONTALES ---
-        // 13.5V (Haut)
-        val y135 = getScaledY(13.5f)
-        canvas.drawLine(0f, y135, width.toFloat(), y135, gridPaintSecondary)
-        canvas.drawText("13.5V", 5f, y135 - 4f, textPaint)
-
-        // 13.33V (Référence Bleu Clair)
-        val y1333 = getScaledY(13.33f)
-        canvas.drawLine(0f, y1333, width.toFloat(), y1333, referencePaint)
-        canvas.drawText("13.33V", width - 50f, y1333 - 4f, referenceTextPaint)
-
-        // 13.0V (Principale)
-        val y130 = getScaledY(13.0f)
-        canvas.drawLine(0f, y130, width.toFloat(), y130, gridPaintMain)
-        canvas.drawText("13.0V", 5f, y130 - 4f, textPaint)
-
-        // 12.5V (Bas)
-        val y125 = getScaledY(12.5f)
-        canvas.drawLine(0f, y125, width.toFloat(), y125, gridPaintSecondary)
-        canvas.drawText("12.5V", 5f, y125 + 14f, textPaint)
-
-        // 13.25V et 12.75V (Secondaires)
-        val y1325 = getScaledY(13.25f)
-        val y1275 = getScaledY(12.75f)
-        canvas.drawLine(0f, y1325, width.toFloat(), y1325, gridPaintSecondary)
-        canvas.drawLine(0f, y1275, width.toFloat(), y1275, gridPaintSecondary)
-
-        // --- LIGNES VERTICALES ---
-        val gridPaintVertical = Paint().apply {
-            color = "#333333".toColorInt()
-            strokeWidth = 1f
-            style = Paint.Style.STROKE
-        }
-        
-        val dx = width.toFloat() / (MAX_HISTORY - 1)
-        for (i in MAX_HISTORY - 1 downTo 0 step 6) {
-            val x = i * dx
-            canvas.drawLine(x, 0f, x, height.toFloat(), gridPaintVertical)
-        }
-
-        // --- TRACÉ DE LA COURBE ---
-        val linePaint = Paint().apply {
-            strokeWidth = 4f
-            isAntiAlias = true
-            style = Paint.Style.STROKE
-            strokeCap = Paint.Cap.ROUND
-        }
-        
-        if (history.size > 1) {
-            val offset = MAX_HISTORY - history.size
-            for (i in 0 until history.size - 1) {
-                val v1 = history[i]
-                val v2 = history[i+1]
-                
-                linePaint.color = getColorForVoltage(v2)
-                
-                val x1 = (i + offset) * dx
-                val y1 = getScaledY(v1)
-                val x2 = (i + 1 + offset) * dx
-                val y2 = getScaledY(v2)
-
-                canvas.drawLine(x1, y1, x2, y2, linePaint)
-            }
-        }
-        
-        val outputStream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-        return Base64.encodeToString(outputStream.toByteArray(), Base64.DEFAULT)
     }
 
     private fun updateWidget() {

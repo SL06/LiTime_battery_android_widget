@@ -32,6 +32,7 @@ import androidx.fragment.app.Fragment
 import com.example.litimebatterie.databinding.FragmentTransformBinding
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.text.SimpleDateFormat
 import java.util.*
 
 class TransformFragment : Fragment() {
@@ -55,7 +56,7 @@ class TransformFragment : Fragment() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions.entries.all { it.value }) startBluetoothScan()
-        else setStatus("Erreur : Permissions Bluetooth/Position manquantes.")
+        else setStatus("Erreur : Permissions manquantes.")
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -67,12 +68,35 @@ class TransformFragment : Fragment() {
             if (isScanning) stopScan() else startBluetoothScan()
         }
 
+        loadLastData()
+
         return binding.root
+    }
+
+    private fun loadLastData() {
+        val prefs = requireContext().getSharedPreferences("BatteryPrefs", Context.MODE_PRIVATE)
+        val lastUpdate = prefs.getString("last_update", null) ?: return
+        
+        handler.post {
+            binding.etWatts.setText(prefs.getString("watts", "-- W"))
+            val levelStr = prefs.getString("level", "0")
+            val percent = levelStr?.replace(",", ".")?.toFloatOrNull() ?: 0f
+            binding.pbBattery.progress = percent.toInt()
+            binding.tvChargePercent.text = "$percent %"
+            binding.etTemp.setText("${prefs.getString("temp", "--")} °C")
+            binding.etVoltCurr.setText(prefs.getString("volt_curr", "-- V / -- A"))
+            binding.etCells.setText(prefs.getString("cells_data", "--"))
+            
+            val color = prefs.getInt("indicator_color", Color.GRAY)
+            binding.pbBattery.progressTintList = ColorStateList.valueOf(color)
+            
+            setStatus("Dernière mise à jour : $lastUpdate")
+        }
     }
 
     private fun setStatus(msg: String) {
         handler.post {
-            binding.etCells.setText(msg)
+            _binding?.tvStatusMessage?.text = msg
         }
     }
 
@@ -105,14 +129,19 @@ class TransformFragment : Fragment() {
         binding.btnConnect.text = "ARRÊTER LA RECHERCHE"
         setStatus("Recherche en cours...")
 
-        handler.postDelayed({ if (isScanning) stopScan() }, 15000)
+        handler.postDelayed({ 
+            if (isScanning) {
+                stopScan()
+                setStatus("Aucune batterie trouvée. Vérifiez la distance.")
+            }
+        }, 15000)
         scanner.startScan(null, settings, scanCallback)
     }
 
     @SuppressLint("MissingPermission")
     private fun stopScan() {
         isScanning = false
-        binding.btnConnect.text = "RECHERCHER BATTERIE"
+        _binding?.let { it.btnConnect.text = "RECHERCHER BATTERIE" }
         bluetoothAdapter?.bluetoothLeScanner?.stopScan(scanCallback)
     }
 
@@ -121,7 +150,8 @@ class TransformFragment : Fragment() {
             val device = result.device
             @SuppressLint("MissingPermission")
             val name = result.scanRecord?.deviceName ?: device.name ?: ""
-            if (name.contains("LiTime", true) || name.contains("BNNA70", true)) {
+            
+            if (name.contains("LiTime", true) || name.contains("BNNA", true)) {
                 setStatus("Batterie trouvée : $name")
                 stopScan()
                 connectToDevice(device)
@@ -176,28 +206,30 @@ class TransformFragment : Fragment() {
             if (status == BluetoothGatt.GATT_SUCCESS && descriptor.uuid == cccdUuid) {
                 val rxChar = gatt.getService(serviceUuid)?.getCharacteristic(rxCharUuid)
                 if (rxChar != null) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        gatt.writeCharacteristic(rxChar, queryCommand, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        rxChar.value = queryCommand
-                        @Suppress("DEPRECATION")
-                        gatt.writeCharacteristic(rxChar)
-                    }
+                    handler.postDelayed({
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            gatt.writeCharacteristic(rxChar, queryCommand, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            rxChar.value = queryCommand
+                            @Suppress("DEPRECATION")
+                            gatt.writeCharacteristic(rxChar)
+                        }
+                    }, 500)
                 }
             }
-        }
-
-        @Deprecated("Deprecated in API 33")
-        @Suppress("DEPRECATION")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            characteristic.value?.let { onCharacteristicChanged(gatt, characteristic, it) }
         }
 
         override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic, value: ByteArray) {
             if (characteristic.uuid == txCharUuid && value.size >= 66) {
                 parseBatteryData(value)
             }
+        }
+        
+        @Deprecated("Deprecated in API 33")
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
+            onCharacteristicChanged(gatt, characteristic, characteristic.value)
         }
     }
 
@@ -228,15 +260,32 @@ class TransformFragment : Fragment() {
 
             val percent = if (capacityAh > 0) (remainingAh / capacityAh * 100).coerceAtMost(100.0) else 0.0
             val color = getColorForVoltage(voltage)
-            
+            val cellsString = cellVolts.joinToString(" | ")
+            val lastUpdate = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
+
+            val prefs = requireContext().getSharedPreferences("BatteryPrefs", Context.MODE_PRIVATE)
+            prefs.edit().apply {
+                putString("level", "%.1f".format(percent))
+                putString("watts", "%.1f W".format(current * voltage))
+                putString("temp", "$tempC")
+                putString("volt_curr", "%.3f V / %.1f A".format(voltage, current))
+                putString("cells_data", cellsString)
+                putString("last_update", lastUpdate)
+                putInt("indicator_color", color)
+                apply()
+            }
+
             handler.post {
-                binding.etWatts.setText("%.1f W".format(current * voltage))
-                binding.pbBattery.progress = percent.toInt()
-                binding.pbBattery.progressTintList = ColorStateList.valueOf(color)
-                binding.tvChargePercent.text = "%.1f %%".format(percent)
-                binding.etTemp.setText("$tempC °C")
-                binding.etVoltCurr.setText("%.2f V / %.1f A".format(voltage, current))
-                binding.etCells.setText(cellVolts.joinToString(" | "))
+                _binding?.let { b ->
+                    b.etWatts.setText("%.1f W".format(current * voltage))
+                    b.pbBattery.progress = percent.toInt()
+                    b.pbBattery.progressTintList = ColorStateList.valueOf(color)
+                    b.tvChargePercent.text = "%.1f %%".format(percent)
+                    b.etTemp.setText("$tempC °C")
+                    b.etVoltCurr.setText("%.3f V / %.1f A".format(voltage, current))
+                    b.etCells.setText(cellsString)
+                    setStatus("Dernière mise à jour : $lastUpdate")
+                }
             }
         } catch (e: Exception) { 
             Log.e("BLE", "Erreur parsing : ${e.message}") 

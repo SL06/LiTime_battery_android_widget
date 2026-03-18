@@ -1,20 +1,17 @@
 package com.example.litimebatterie.ui.settings
 
+import android.content.Context
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.TextView
+import android.widget.Toast
 import androidx.fragment.app.Fragment
-import androidx.lifecycle.ViewModelProvider
 import com.example.litimebatterie.databinding.FragmentSettingsBinding
 
 class SettingsFragment : Fragment() {
 
     private var _binding: FragmentSettingsBinding? = null
-
-    // This property is only valid between onCreateView and
-    // onDestroyView.
     private val binding get() = _binding!!
 
     override fun onCreateView(
@@ -22,17 +19,18 @@ class SettingsFragment : Fragment() {
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val settingsViewModel =
-            ViewModelProvider(this)[SettingsViewModel::class.java]
-
         _binding = FragmentSettingsBinding.inflate(inflater, container, false)
-        val root: View = binding.root
+        
+        val prefs = requireContext().getSharedPreferences("BatteryPrefs", Context.MODE_PRIVATE)
+        binding.etEmailDestination.setText(prefs.getString("email_dest", ""))
 
-        val textView: TextView = binding.textSettings
-        settingsViewModel.text.observe(viewLifecycleOwner) {
-            textView.text = it
+        binding.btnSaveSettings.setOnClickListener {
+            val email = binding.etEmailDestination.text.toString()
+            prefs.edit().putString("email_dest", email).apply()
+            Toast.makeText(context, "Paramètres sauvegardés", Toast.LENGTH_SHORT).show()
         }
-        return root
+
+        return binding.root
     }
 
     override fun onDestroyView() {
